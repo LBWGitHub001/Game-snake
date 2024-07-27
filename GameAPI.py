@@ -30,6 +30,9 @@ class GameAPI:
     def get_len(self):  #获取蛇的长度,返回值:int
         pass
 
+    def get_done(self): #返回当前游戏是否结束(Game over)
+        pass
+
 
 class GameManager:
     def __init__(self):
