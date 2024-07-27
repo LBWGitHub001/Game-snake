@@ -65,10 +65,14 @@ class Frame:
         if head[0] > X_max - 1 or head[0] < 0 or head[1] > Y_max - 1 or head[1] < 0:
             global isDead
             isDead = True
-            return
+            return isDead
+        if head in self.snake:
+            isDead = True
+            return isDead
         self.snake.insert(0, head)
         if isEat == False:
             self.snake.pop(-1)  # 删除尾部一节
+        return isDead
 
     def clearGraph(self):
         self.graph = [[0 for i in range(X_max)] for i in range(Y_max)]
@@ -105,7 +109,7 @@ class Frame:
     def getGraph(self):
         self.clearGraph()
         self.update()
-        return self.graph
+        return self.snake, self.food
 
 
 def position(x, y):
@@ -115,15 +119,24 @@ def position(x, y):
 def show(screen, graph):
     screen.fill(color['black'])
     body_count = 0
-    for i in range(X_max):
-        for j in range(Y_max):
-            if graph[i][j] == 1:
-                pygame.draw.rect(screen, (0, 255 * math.exp(-body_count), 0), pygame.Rect(position(i, j), block))
-                body_count += 0.02
-            elif graph[i][j] == 2:
-                pygame.draw.rect(screen, color['blue'], pygame.Rect(position(i, j), block))
-            elif graph[i][j] == 3:
-                pygame.draw.rect(screen, color['yellow'], pygame.Rect(position(i, j), block))
+    snack=graph[0]
+    food=graph[1][0]
+    head = snack[0]
+    pygame.draw.rect(screen, color['yellow'], pygame.Rect(position(food[0], food[1]), block))
+    pygame.draw.rect(screen, color['blue'], pygame.Rect(position(head[0], head[1]), block))
+    for body in snack[1:]:
+        pygame.draw.rect(screen, (0, 255 * math.exp(-body_count), 0), pygame.Rect(position(body[0], body[1]), block))
+        body_count += 0.02
+
+    #for i in range(X_max):
+    #    for j in range(Y_max):
+    #        if graph[i][j] == 1:
+    #            pygame.draw.rect(screen, (0, 255 * math.exp(-body_count), 0), pygame.Rect(position(i, j), block))
+    #            body_count += 0.02
+    #        elif graph[i][j] == 2:
+    #            pygame.draw.rect(screen, color['blue'], pygame.Rect(position(i, j), block))
+    #        elif graph[i][j] == 3:
+    #            pygame.draw.rect(screen, color['yellow'], pygame.Rect(position(i, j), block))
     pygame.display.flip()
 
 
@@ -146,7 +159,9 @@ def main():
     while not isDead:
         for event in pygame.event.get():
             if event.type == TIMER_EVENT_TYPE:
-                frame.forward()
+                isDead = frame.forward()
+                if isDead:
+                    break
                 show(screen, frame.getGraph())
             elif event.type == pygame.QUIT:
                 pygame.quit()
