@@ -25,3 +25,17 @@ class GameAPI:
 
     def get_len(self):  #获取蛇的长度
         pass
+
+class GameManager:
+    def __init__(self, num_game):
+        self.games = [GameAPI() for i in range(num_game)]
+        self.num_game = num_game
+
+    def get_game(self, index):
+        return self.games[index]
+
+    def __getitem__(self,index):
+        return self.get_game(index)
+
+    def __iter__(self):
+        return iter(self.games)
