@@ -13,8 +13,6 @@ class CNN(nn.Module):
         self.fc2 = nn.Linear(in_features=128, out_features=32)
         self.fc3 = nn.Linear(in_features=32, out_features=3)
 
-        #critic
-        self.vfc1 = nn.Linear(in_features=64, out_features=128)
 
     def forward(self, x):
         x = F.relu(self.conv1(x))

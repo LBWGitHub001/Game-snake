@@ -151,6 +151,7 @@ def main(frame):
     # 设置定时器事件类型（这里使用自定义事件类型）
     TIMER_EVENT_TYPE = pygame.USEREVENT + 1
     # 设置定时器，每 1000 毫秒（1 秒）触发一次 TIMER_EVENT_TYPE 事件
+    global fps
     pygame.time.set_timer(TIMER_EVENT_TYPE, fps)
 
     global isDead
@@ -162,7 +163,6 @@ def main(frame):
                     break
                 show(screen, frame.getGraph(), font)
             elif event.type == pygame.QUIT:
-                pygame.quit()
                 isDead = True
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:
@@ -179,10 +179,16 @@ def main(frame):
                     frame.setDirection(Direction.RIGHT)
 
     print('Game Over!')
+    isExit = False
+    while not isExit:
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                isExit = True
+                break
 
+    pygame.quit()
 
 if __name__ == '__main__':
-    global fps
     fps = 300
     frame = Frame()
-    main()
+    main(frame)
