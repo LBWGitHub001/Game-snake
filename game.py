@@ -1,6 +1,7 @@
 import math
 import random
 import pygame
+import threading
 from enum import Enum, auto
 
 screen_width = 1200
@@ -122,8 +123,8 @@ def position(x, y):
 def show(screen, graph, font):
     screen.fill(color['black'])
     body_count = 0
-    snack=graph[0]
-    food=graph[1][0]
+    snack = graph[0]
+    food = graph[1][0]
     head = snack[0]
     pygame.draw.rect(screen, color['yellow'], pygame.Rect(position(food[0], food[1]), block))
     pygame.draw.rect(screen, color['blue'], pygame.Rect(position(head[0], head[1]), block))
@@ -133,11 +134,11 @@ def show(screen, graph, font):
 
     global score
     score_text = font.render(f'Score: {score}', True, color['white'])
-    screen.blit(score_text, (10,0))
+    screen.blit(score_text, (10, 0))
     pygame.display.flip()
 
 
-def main():
+def main(frame):
     # 初始化 Pygame
     pygame.init()
     pygame.font.init()
@@ -147,7 +148,6 @@ def main():
     screen.fill((0, 0, 0))
     clock = pygame.time.Clock()
 
-    frame = Frame()
     # 设置定时器事件类型（这里使用自定义事件类型）
     TIMER_EVENT_TYPE = pygame.USEREVENT + 1
     # 设置定时器，每 1000 毫秒（1 秒）触发一次 TIMER_EVENT_TYPE 事件
@@ -160,7 +160,7 @@ def main():
                 isDead = frame.forward()
                 if isDead:
                     break
-                show(screen, frame.getGraph(),font)
+                show(screen, frame.getGraph(), font)
             elif event.type == pygame.QUIT:
                 pygame.quit()
                 isDead = True
@@ -182,4 +182,7 @@ def main():
 
 
 if __name__ == '__main__':
+    global fps
+    fps = 300
+    frame = Frame()
     main()
