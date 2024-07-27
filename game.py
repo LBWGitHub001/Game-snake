@@ -72,6 +72,9 @@ class Frame:
         self.snake.insert(0, head)
         if isEat == False:
             self.snake.pop(-1)  # 删除尾部一节
+        else:
+            global score
+            score += 100
         return isDead
 
     def clearGraph(self):
@@ -109,14 +112,14 @@ class Frame:
     def getGraph(self):
         self.clearGraph()
         self.update()
-        return self.snake, self.food
+        return self.snake, self.food, self.direction
 
 
 def position(x, y):
     return x * block_size, y * block_size
 
 
-def show(screen, graph):
+def show(screen, graph, font):
     screen.fill(color['black'])
     body_count = 0
     snack=graph[0]
@@ -128,30 +131,25 @@ def show(screen, graph):
         pygame.draw.rect(screen, (0, 255 * math.exp(-body_count), 0), pygame.Rect(position(body[0], body[1]), block))
         body_count += 0.02
 
-    #for i in range(X_max):
-    #    for j in range(Y_max):
-    #        if graph[i][j] == 1:
-    #            pygame.draw.rect(screen, (0, 255 * math.exp(-body_count), 0), pygame.Rect(position(i, j), block))
-    #            body_count += 0.02
-    #        elif graph[i][j] == 2:
-    #            pygame.draw.rect(screen, color['blue'], pygame.Rect(position(i, j), block))
-    #        elif graph[i][j] == 3:
-    #            pygame.draw.rect(screen, color['yellow'], pygame.Rect(position(i, j), block))
+    global score
+    score_text = font.render(f'Score: {score}', True, color['white'])
+    screen.blit(score_text, (10,0))
     pygame.display.flip()
 
 
 def main():
+    # 初始化 Pygame
     pygame.init()
+    pygame.font.init()
+    font = pygame.font.SysFont(None, 50)
     screen = pygame.display.set_mode((screen_width, screen_height))
     pygame.display.set_caption('贪吃蛇')
     screen.fill((0, 0, 0))
     clock = pygame.time.Clock()
 
     frame = Frame()
-
     # 设置定时器事件类型（这里使用自定义事件类型）
     TIMER_EVENT_TYPE = pygame.USEREVENT + 1
-
     # 设置定时器，每 1000 毫秒（1 秒）触发一次 TIMER_EVENT_TYPE 事件
     pygame.time.set_timer(TIMER_EVENT_TYPE, fps)
 
@@ -162,7 +160,7 @@ def main():
                 isDead = frame.forward()
                 if isDead:
                     break
-                show(screen, frame.getGraph())
+                show(screen, frame.getGraph(),font)
             elif event.type == pygame.QUIT:
                 pygame.quit()
                 isDead = True
