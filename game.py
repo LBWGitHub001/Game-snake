@@ -114,6 +114,9 @@ class Frame:
         self.clearGraph()
         self.update()
         return self.snake, self.food, self.direction
+    
+    def getDirection(self):
+        return self.direction
 
 
 def position(x, y):
@@ -192,3 +195,5 @@ if __name__ == '__main__':
     fps = 300
     frame = Frame()
     main(frame)
+
+

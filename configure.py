@@ -1,14 +1,9 @@
 import torch
-import model
 from GameAPI import GameManager
 from memory import Memory
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-#cnn = model.CNN().to(device)
-#actorCritic = model.ActorCritic().to(device)
 memory = Memory()
-
-
 
 
 GMM = GameManager()

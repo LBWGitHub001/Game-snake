@@ -3,13 +3,13 @@ class Memory:
         self.states=[]
         self.actions=[]
         self.rewards=[]
-        self.logprob=[]
+        self.logprobs=[]
         self.is_terminal=[]
 
     def clear(self):
         del self.states[:]
         del self.actions[:]
         del self.rewards[:]
-        del self.logprob[:]
+        del self.logprobs[:]
         del self.is_terminal[:]
 

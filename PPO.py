@@ -1,11 +1,13 @@
+import torch
+
 from configure import *
 import torch.optim as optim
-from torch import nn
 from model import ActorCritic
+from torch import nn
 
 
 class PPO:
-    def __init__(self, lr, betas, gamma, epochs, eps, state_size=(12, 12), action_size=3):
+    def __init__(self, lr, betas, gamma, epochs, eps, timestep, state_size=(12, 12), action_size=3):
         # 参数获取
         self.state_size = state_size
         self.action_size = action_size
@@ -14,6 +16,7 @@ class PPO:
         self.eps = eps
         self.lr = lr
         self.betas = betas
+        self.timestep = timestep
         # 定义网络
         self.policy = ActorCritic().to(device)
         self.optimizer = optim.Adam(self.policy.parameters(), lr=self.lr, betas=self.betas)
@@ -53,8 +56,9 @@ class PPO:
             surr1 = ratios * advantages
             surr2 = torch.clamp(ratios, 1 - self.eps, 1 + self.eps) * advantages
             #TD差分
-            loss = -torch.min(surr1, surr2) + self.loss(state_value, discounted_rewards)*0.5 - 0.01*dist_entropy
-
+            DR_T = (torch.ones((self.timestep))*discounted_rewards).to(device).detach()
+            loss = -torch.min(surr1, surr2) + self.loss(state_value, DR_T)*0.5 - 0.01*dist_entropy
+            loss = loss.mean()
             #开始学习，更新参数
             self.optimizer.zero_grad()
             loss.backward()
