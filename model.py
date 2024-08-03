@@ -24,7 +24,7 @@ class Actor(nn.Module):
         x = F.softmax(x, dim=-1)
         return x
 '''
-class Critic(nn.Module):
+class ActorCritic(nn.Module):
     def __init__(self):
         super(Critic, self).__init__()
         # critic
@@ -112,3 +112,4 @@ class ActorCritic(nn.Module):
         state_values = self.value_layer(state)
 
         return action_log_probs, torch.squeeze(dist_entropy), state_values
+

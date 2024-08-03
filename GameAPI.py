@@ -37,15 +37,15 @@ class GameAPI:
         return self.toNumpy(self.frame.getGraph())
 
     def set_action(self, opt):  # 从模型获取操作opt,并进行处理,返回值12*12图像
+        self.snake_pre = []
+        for it in self.snake_post:
+            self.snake_pre.append(it)
         opts = operation[opt]
         self.pre_Graph = self.Graph.copy()
         dir = opts[self.frame.getDirection()]
         self.frame.setDirection(dir)
         self.frame.forward()
         self.get_food()
-        self.snake_pre = []
-        for it in self.snake_post:
-            self.snake_pre.append(it)
 
         if self.isRender:
             show(self.screen, self.frame.getGraph(), self.font)
@@ -55,39 +55,19 @@ class GameAPI:
         self.snake_post = graph[0]
         return self.toNumpy(graph)
 
-    def get_now_graph(self):  # 获取操作前的图像,返回值:12*12图像
-        warnings.warn("此方法已废弃，不推荐使用", DeprecationWarning)
-        self.food = self.get_food()
-        self.get_len('pre')
-        return self.toNumpy(self.frame.getGraph())
-
-    def get_next_graph(self):  # 获取操作后的图像,返回值:12*12图像
-        warnings.warn("此方法已废弃，不推荐使用", DeprecationWarning)
-        self.isDead = self.frame.forward()
-        self.food = self.get_food()
-        self.get_len('post')
-        return self.toNumpy(self.frame.getGraph())
-
     def get_reward(self):  # 获取奖励,不需要覆写
         award = 0
         d_food_pre = (self.snake_pre[0][0] - self.food[0][0]) ** 2 + (self.snake_pre[0][1] - self.food[0][1]) ** 2
         d_food_post = (self.snake_post[0][0] - self.food[0][0]) ** 2 + (self.snake_post[0][1] - self.food[0][1]) ** 2
         if d_food_pre > d_food_post:
-            award += 5
+            award += 6
         else:
-            award -= 5
-        d_center_pre = (self.snake_pre[0][0] - 6.5) ** 2 + (self.snake_pre[0][1] - 6.5) ** 2
-        d_center_post = (self.snake_post[0][0] - 6.5) ** 2 + (self.snake_post[0][1] - 6.5) ** 2
-        if d_center_pre > d_center_post:
-            award += 5
-        else:
-            award -= 5
-        if self.isDead:
-            award -= 100
+            award -= 6
         if self.isEat:
-            award += 20
+            award += 200
         if self.isRender:
             print("This step,the Reward is " + str(award))
+            print(f'[{self.snake_post[0][0]}][{self.snake_post[0][1]}]')
         return award
 
     def get_head(self):  # 获取蛇的头坐标,返回值:(x,y)元组

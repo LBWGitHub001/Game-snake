@@ -68,3 +68,5 @@ class PPO:
         #复制旧数据
         self.policy_old.load_state_dict(self.policy.state_dict())
 
+    def save(self,pth):
+        torch.save(self.policy.state_dict(), pth)

@@ -60,6 +60,7 @@ class Frame:
             head = head[0] - 1, head[1]
         elif self.direction == Direction.RIGHT:
             head = head[0] + 1, head[1]
+
         if head in self.food:
             self.food.clear()
             isEat = True
@@ -114,7 +115,7 @@ class Frame:
         self.clearGraph()
         self.update()
         return self.snake, self.food, self.direction
-    
+
     def getDirection(self):
         return self.direction
 
@@ -197,9 +198,8 @@ def main(frame):
 
     pygame.quit()
 
+
 if __name__ == '__main__':
     fps = 300
     frame = Frame()
     main(frame)
-
-

@@ -47,7 +47,7 @@ def main(args):
                 GMM[0].reset()
 
         print("Eposide: ", eposide, "  Reward: ", running_reward / args.timestep)
-
+    ppo.save("./Models/AC.pth")
 
 def get_args():
     parser = argparse.ArgumentParser("parameters")
