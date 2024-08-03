@@ -20,6 +20,7 @@ class PPO:
         # 定义网络
         self.policy = ActorCritic().to(device)
         self.optimizer = optim.Adam(self.policy.parameters(), lr=self.lr, betas=self.betas)
+        #self.optimizerC = optim.Adam(self.policy.Critic.parameters(), lr=self.lr, betas=self.betas)
         self.policy_old = ActorCritic().to(device)
         self.policy_old.load_state_dict(self.policy.state_dict())
         # 定义损失函数
@@ -57,7 +58,7 @@ class PPO:
             surr2 = torch.clamp(ratios, 1 - self.eps, 1 + self.eps) * advantages
             #TD差分
             DR_T = (torch.ones((self.timestep))*discounted_rewards).to(device).detach()
-            loss = -torch.min(surr1, surr2) + self.loss(state_value, DR_T)*0.5 - 0.01*dist_entropy
+            loss = -torch.min(surr1, surr2) + self.loss(state_value, rewards)*0.5 - 0.01*dist_entropy
             loss = loss.mean()
             #开始学习，更新参数
             self.optimizer.zero_grad()

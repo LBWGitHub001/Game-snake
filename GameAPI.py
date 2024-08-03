@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pygame
 from game import Frame, Direction, screen_width, screen_height, block_size
@@ -23,30 +25,44 @@ class GameAPI:
         self.isEat = False
         self.isRender = False
         self.food = []
-        self.snake_pre = []
-        self.snake_post = []
+        self.snake_pre = [(6, 6), (5, 6)]
+        self.snake_post = [(6, 6), (5, 6)]
 
-    def reset(self):  # 初始化,重新开始游戏,返回值:12*12图像
-        self.frame = Frame()
-        return self.get_now_graph()
+    def reset(self):  # 初始化,重新开始游戏,返回值:12*12 图像
+        if self.frame is None:
+            self.frame = Frame()
+        else:
+            self.frame.clear()  # 清空游戏前端数据
+            self.clear()  # 清空缓存数据
+        return self.toNumpy(self.frame.getGraph())
 
-    def set_action(self, opt):  # 从模型获取操作opt,并进行处理,返回值12*12图像(相当于最后调用一下get_next_graph)
+    def set_action(self, opt):  # 从模型获取操作opt,并进行处理,返回值12*12图像
         opts = operation[opt]
-        self.pre_Graph = self.Graph
+        self.pre_Graph = self.Graph.copy()
         dir = opts[self.frame.getDirection()]
         self.frame.setDirection(dir)
         self.frame.forward()
-        if self.render:
+        self.get_food()
+        self.snake_pre = []
+        for it in self.snake_post:
+            self.snake_pre.append(it)
+
+        if self.isRender:
             show(self.screen, self.frame.getGraph(), self.font)
             time.sleep(1)
-        return self.get_next_graph()
+
+        graph = self.frame.getGraph()
+        self.snake_post = graph[0]
+        return self.toNumpy(graph)
 
     def get_now_graph(self):  # 获取操作前的图像,返回值:12*12图像
+        warnings.warn("此方法已废弃，不推荐使用", DeprecationWarning)
         self.food = self.get_food()
         self.get_len('pre')
         return self.toNumpy(self.frame.getGraph())
 
     def get_next_graph(self):  # 获取操作后的图像,返回值:12*12图像
+        warnings.warn("此方法已废弃，不推荐使用", DeprecationWarning)
         self.isDead = self.frame.forward()
         self.food = self.get_food()
         self.get_len('post')
@@ -66,10 +82,12 @@ class GameAPI:
             award += 5
         else:
             award -= 5
-        if self.isDead == True:
+        if self.isDead:
             award -= 100
-        if self.isEat == True:
+        if self.isEat:
             award += 20
+        if self.isRender:
+            print("This step,the Reward is " + str(award))
         return award
 
     def get_head(self):  # 获取蛇的头坐标,返回值:(x,y)元组
@@ -117,6 +135,16 @@ class GameAPI:
         self.screen = pygame.display.set_mode((screen_width, screen_height))
         pygame.display.set_caption('贪吃蛇')
         self.screen.fill((0, 0, 0))
+
+    def clear(self):
+        self.Graph = np.zeros((3, 12, 12))
+        self.pre_Graph = np.zeros((3, 12, 12))
+        self.award = 0
+        self.isDead = False
+        self.isEat = False
+        self.food.clear()
+        self.snake_pre = [(6, 6), (5, 6)]
+        self.snake_post = [(6, 6), (5, 6)]
 
 
 class GameManager:

@@ -118,6 +118,12 @@ class Frame:
     def getDirection(self):
         return self.direction
 
+    def clear(self):
+        self.clearGraph()
+        self.snake = [(6, 6), (5, 6)]
+        self.food = []
+        self.direction = Direction.RIGHT
+
 
 def position(x, y):
     return x * block_size, y * block_size
