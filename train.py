@@ -49,7 +49,7 @@ def main(args):
                 GMM[0].reset()
 
         print("Eposide: ", eposide, "  Reward: ", running_reward / args.timestep)
-    savePath = os.path.join(args.save_path,"AC.pth")
+    savePath = args.save_path
     ppo.save(savePath)
     print("Saved model to {}".format(savePath))
 
@@ -59,7 +59,7 @@ def get_args():
     parser.add_argument("--episodes", type=int, default=50000)  # 玩多少遍游戏
     parser.add_argument("--lr", type=float, default=0.03)  # 学习率
     parser.add_argument("--gamma", type=int, default=0.99)  # 折扣因子
-    parser.add_argument("--save-path", type=str, default='./Models')
+    parser.add_argument("--save-path", type=str, default='./Models/AC.pth')
     parser.add_argument("--num-game", type=int, default=1)  # 游戏线程
     parser.add_argument("--epochs", type=int, default=4)  # 一次数据训练次数
     parser.add_argument("--seed", type=int, default=None)  # 随机种子

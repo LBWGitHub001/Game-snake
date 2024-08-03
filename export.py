@@ -6,7 +6,7 @@ from PPO import PPO, ActorCritic
 
 
 def main(args):
-    savePath = os.path.join(args.save_path, 'AC.pth')
+    savePath = args.save_path
     state = GMM[0].reset()
     GMM[0].render(args.render)
     ppo = ActorCritic()
@@ -21,9 +21,7 @@ def main(args):
 
 def get_args():
     parser = argparse.ArgumentParser("parameters")
-    parser.add_argument("--save-path", type=str, default='./Models')
-    parser.add_argument("--num-game", type=int, default=1)  # 游戏线程
-    parser.add_argument("--epochs", type=int, default=4)  # 一次数据训练次数
+    parser.add_argument("--save-path", type=str, default='./Models/AC.pth')
     parser.add_argument("--seed", type=int, default=None)  # 随机种子
     parser.add_argument("--render", type=bool, default=True)  # 是否要显示过程
     args = parser.parse_args()
