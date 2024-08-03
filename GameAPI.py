@@ -65,6 +65,9 @@ class GameAPI:
             award -= 6
         if self.isEat:
             award += 200
+        if self.isDead:
+            award -= 300
+
         if self.isRender:
             print("This step,the Reward is " + str(award))
             print(f'[{self.snake_post[0][0]}][{self.snake_post[0][1]}]')

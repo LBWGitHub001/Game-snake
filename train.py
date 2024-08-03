@@ -66,7 +66,7 @@ def get_args():
     parser.add_argument("--eps", type=float, default=0.2)  # PPO2算法中的界
     parser.add_argument("--bate1", type=float, default=0.2)  # Adam动量的位置惯性系数
     parser.add_argument("--bate2", type=float, default=0.2)  # Adam动量的速度惯性系数
-    parser.add_argument("--render", type=bool, default=False)  # 是否要显示过程
+    parser.add_argument("--render", action='store_true')  # 是否要显示过程
     args = parser.parse_args()
     return args
 
