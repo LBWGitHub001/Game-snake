@@ -1,17 +1,19 @@
 import argparse
 import os.path
-
+from client import GameManager, GameManager
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from configure import *
 from PPO import PPO
-
+state=None
 
 def main(args):
+    global state
     ppo = PPO(args.lr, (args.bate1, args.bate2), args.gamma, args.epochs, args.eps, args.timestep)
-    get_GameManager(args.num_game)
+    GMM=GameManager()
+    GMM.set_game_num(args.num_game)
     # 定义变量
     running_reward = 0
     avg_length = 0
@@ -28,9 +30,7 @@ def main(args):
 
             # 运行policy_old
             action = ppo.policy_old.act(state, memory)
-            state = GMM[0].set_action(action)
-            reward = GMM[0].get_reward()
-            done = GMM[0].get_done()
+            state, reward, done = GMM[0].stepOver(action)
 
             # 保存reward,is_terminal
             memory.rewards.append(reward)
@@ -44,14 +44,15 @@ def main(args):
 
             # 累加奖励
             running_reward += reward
-
-            if GMM[0].get_done():
-                GMM[0].reset()
+            #print("qwee")
+            if done:
+                state = GMM[0].reset()
+                #print("41562Qerqwd")
 
         print("Eposide: ", eposide, "  Reward: ", running_reward / args.timestep)
-    savePath = args.save_path
-    ppo.save(savePath)
-    print("Saved model to {}".format(savePath))
+    #savePath = args.save_path
+    #ppo.save(savePath)
+    #print("Saved model to {}".format(savePath))
 
 def get_args():
     parser = argparse.ArgumentParser("parameters")
