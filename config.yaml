@@ -1,0 +1,52 @@
+# game 设置
+game:
+  xpx: 12 # x方向块数量
+  ypx: 12 # y方向块数量
+  blockSize: 100 # 方块大小
+
+# 网络设置
+actor:
+  cnn1:
+    in_channels: 3
+    out_channels: 32
+    kernel_size: 5
+  cnn2:
+    in_channels: 32
+    out_channels: 64
+    kernel_size: 3
+  liner1:
+    in_features: 256
+    out_features: 64
+  liner2:
+    in_features: 64
+    out_features: 3
+critic:
+  cnn1:
+    in_channels: 3
+    out_channels: 32
+    kernel_size: 5
+  cnn2:
+    in_channels: 32
+    out_channels: 64
+    kernel_size: 3
+  liner1:
+    in_features: 256
+    out_features: 64
+  liner2:
+    in_features: 64
+    out_features: 16
+  liner3:
+    in_features: 16
+    out_features: 1
+
+
+#训练设置
+lr: 0.03   # 学习率
+beta1: 0.2 # Adam 动量惯性系数1
+beta2: 0.3 # Adam 动量惯性系数2
+num_games: 4 # 启动多少个游戏线程
+eposide: 3000 # 玩多少次游戏
+timestep: 500 # 收集多少组数据更新一下参数
+epoch: 4 # 同一组参数更新几次
+gamma: 0.99 # 折扣因子
+eps: 0.2 # PPO2的截断界

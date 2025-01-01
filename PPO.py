@@ -1,72 +1,96 @@
 import torch
-
-from configure import *
+import torch.nn as nn
 import torch.optim as optim
-from model import ActorCritic
-from torch import nn
+from torch.distributions import Categorical
 
+from models import Model
+from utils import *
+from threading import Lock
+from game.game import *
+from game.gameEngine import GameEngine
+
+from Logger import getLogger
 
 class PPO:
-    def __init__(self, lr, betas, gamma, epochs, eps, timestep, state_size=(12, 12), action_size=3):
+    def __init__(self, config, device, loss):
+        self.config = config
         # 参数获取
-        self.state_size = state_size
-        self.action_size = action_size
-        self.gamma = gamma
-        self.epochs = epochs
-        self.eps = eps
-        self.lr = lr
-        self.betas = betas
-        self.timestep = timestep
+        # self.state_size = state_size
+        # self.action_size = action_size
+        self.gamma = config['gamma']
+        self.epochs = config['epoch']
+        self.eps = config['eps']
+        # self.lr = lr
+        # self.betas = betas
+        self.timestep = config['timestep']
         # 定义网络
-        self.policy = ActorCritic().to(device)
-        self.optimizer = optim.Adam(self.policy.parameters(), lr=self.lr, betas=self.betas)
-        #self.optimizerC = optim.Adam(self.policy.Critic.parameters(), lr=self.lr, betas=self.betas)
-        self.policy_old = ActorCritic().to(device)
-        self.policy_old.load_state_dict(self.policy.state_dict())
+        self.device = device
+        self.policy = Model(config).to(device=device)
+        self.optimizer = optim.Adam(self.policy.parameters(), lr=config['lr'], betas=(config['beta1'], config['beta2']))
         # 定义损失函数
-        self.loss = nn.MSELoss()
+        self.loss = loss
+        # 定义数据收集器
+        self.DataSelector = DataSelector()  # 数据收集器
+        self.dataModelList = list()  # 模型线程
+        for i in range(config['num_games']):  # 循环创建游戏线程
+            dataModel = Model(config).to(device=device)
+            dataThread = DataBlockThread(id=i,
+                                         config=config,
+                                         dataModel=dataModel,
+                                         dataSelector=[self.DataSelector],
+                                         device=device
+                                         )
+            self.dataModelList.append(dataThread)
 
-    def update(self, memory):
+        self.DataSelector.setDataModelList(self.dataModelList)  # 将数据收集器和模型列表链接
+
+        for dataModel in self.dataModelList:
+            dataModel.setTimestep(config['timestep'])
+            thread = dataModel.createThread()
+            thread.start()
+
+    def start(self):
         # 使用蒙特卡洛截断估计奖励
-        rewards = []
-        discounted_rewards = 0
-        for reward, is_terminal in zip(reversed(memory.rewards), reversed(memory.is_terminal)):
-            if is_terminal: #如果gameover了，那么没有奖励
-                discounted_rewards = 0
-            discounted_rewards = reward + discounted_rewards * self.gamma
-            rewards.insert(0, discounted_rewards)
+        cvParse.acquire()
+        cvParse.wait()
+        block = self.DataSelector.read()
+        data=block.data
+        threadId = block.id
+
+        old_states = data[0]
+        old_actions = data[1]
+        old_rewards = data[2]
+        dist = Categorical(old_actions)  # 按照概率进行采样
+        old_logprobs = dist.log_prob(dist.sample())
         # 标准化
-        rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
-        rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-5)
+        rewards = (old_rewards - old_rewards.mean()) / (old_rewards.std() + 1e-5)
 
-        #list转tensor
-        old_states = torch.stack(memory.states).to(device).detach()
-        old_actions = torch.stack(memory.actions).to(device).detach()
-        old_logprobs = torch.stack(memory.logprobs).to(device).detach()
-
-        #更新模型
+        # 更新模型
         for _ in range(self.epochs):
             # 评价久数据
             logprobs, state_value, dist_entropy = self.policy.evaluate(old_states, old_actions)
 
-            #计算比率PPO2
+            # 计算比率PPO2
             ratios = torch.exp(old_logprobs - old_logprobs.detach())
 
-            #计算Loss
+            # 计算Loss
             advantages = rewards - state_value.detach()
             surr1 = ratios * advantages
             surr2 = torch.clamp(ratios, 1 - self.eps, 1 + self.eps) * advantages
-            #TD差分
-            DR_T = (torch.ones((self.timestep))*discounted_rewards).to(device).detach()
-            loss = -torch.min(surr1, surr2) + self.loss(state_value, rewards)*0.5 - 0.01*dist_entropy
+            # TD差分
+            DR_T = (torch.ones((self.timestep)) * 1).to(self.device).detach()
+            loss = -torch.min(surr1, surr2) + self.loss(state_value, rewards) * 0.5 - 0.01 * dist_entropy
             loss = loss.mean()
-            #开始学习，更新参数
+            # 开始学习，更新参数
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
 
-        #复制旧数据
-        self.policy_old.load_state_dict(self.policy.state_dict())
+            getLogger().setEpoch()
+            getLogger().printInfo()
+        getLogger().setEposide()
 
-    def save(self,pth):
-        torch.save(self.policy.state_dict(), pth)
+        # 复制旧数据
+        cvParse.notify()
+        cvParse.release()
+        self.DataSelector.updateModel(threadId,self.policy.state_dict())
