@@ -44,9 +44,10 @@ critic:
 lr: 0.03   # 学习率
 beta1: 0.2 # Adam 动量惯性系数1
 beta2: 0.3 # Adam 动量惯性系数2
-num_games: 4 # 启动多少个游戏线程
+num_games: 6 # 启动多少个游戏线程
 eposide: 3000 # 玩多少次游戏
 timestep: 500 # 收集多少组数据更新一下参数
 epoch: 4 # 同一组参数更新几次
 gamma: 0.99 # 折扣因子
 eps: 0.2 # PPO2的截断界
+render: True # 是否显示训练过程

@@ -1,5 +1,7 @@
 import threading
 from threading import Thread, Lock
+
+import pygame
 import torch
 import torch.nn as nn
 from Logger import getLogger
@@ -21,7 +23,8 @@ class DataBlock:
 
 
 class DataBlockThread:
-    def __init__(self, id, config, dataModel, dataSelector, device):
+    def __init__(self, id, config, dataModel, dataSelector, device, render):
+        self.config = config
         self.id = id
         self.DataNN = dataModel  # 线程中运行的数据采集网络(DataNN)
         self.optimer = torch.optim.Adam(self.DataNN.parameters(), lr=1e-3)
@@ -33,10 +36,14 @@ class DataBlockThread:
         self.timestep = 0
         self.havenRun = False  #
         self.device = device
+        self.render = render
 
         self.states = None
         self.actions = None
         self.awards = None
+
+        # 图形显示
+        self.screen = None
 
     def setTimestep(self, timestep):  # 为程序设置一个eposide
         self.timestep = timestep
@@ -45,6 +52,12 @@ class DataBlockThread:
         def thread_func():
             getLogger().rigisterDataGenrated()
             iterCount = 0
+            if self.render:
+                pygame.init()
+                self.screen = pygame.display.set_mode((self.config['game']['xpx'] * self.config['game']['blockSize'],
+                                                       self.config['game']['ypx'] * self.config['game']['blockSize']))
+                pygame.display.set_caption('游戏显示实例')
+                self.screen.fill((255, 255, 255))
             while True:
                 while not self.stop:
                     state = self.game.getState().to(self.device)  # 从game中读取当前的状态
@@ -62,12 +75,28 @@ class DataBlockThread:
                     else:
                         self.awards = torch.cat((self.awards, award), dim=0)
 
-                    _,arg=torch.max(action,dim=1)
+                    _, arg = torch.max(action, dim=1)
                     if self.actions == None:
                         self.actions = arg
                     else:
-                        self.actions = torch.cat((self.actions, arg),dim=0)
+                        self.actions = torch.cat((self.actions, arg), dim=0)
                     iterCount += 1  # 数据数+1
+
+                    if self.render:  # 图形显示
+                        size = self.config['game']['blockSize']
+                        for j in range(self.config['game']['xpx']):
+                            for i in range(self.config['game']['ypx']):
+                                r = state[0][0][i][j].item()
+                                g = state[0][1][i][j].item()
+                                b = state[0][2][i][j].item()
+                                color = (r, g, b)
+                                x = i * size
+                                y = j * size
+                                w = size
+                                h = size
+                                block = (x, y, w, h)
+                                pygame.draw.rect(self.screen, color, block)
+                            pygame.display.flip()
                     if iterCount >= self.timestep:  # 数据收集够了之后，将缓存中的数据写入数据管理
                         # print(self.id)  # Debug点
                         dataBlock = DataBlock(self.id, (self.states, self.actions, self.awards))  # 构筑一个数据包

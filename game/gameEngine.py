@@ -21,6 +21,16 @@ class GameEngine:
         self.snake = list()
         self.snake.append((random.randint(0, self.xTotal-1), random.randint(0, self.yTotal-1)))
         self.direction = random.randint(0, 3)
+        self.genFood()
+        self.award = 0
+
+    def reset(self):
+        self.state = torch.zeros((3, self.xTotal, self.yTotal), dtype=torch.float32)
+        self.food = list()
+        self.snake = list()
+        self.snake.append((random.randint(0, self.xTotal-1), random.randint(0, self.yTotal-1)))
+        self.direction = random.randint(0, 3)
+        self.genFood()
         self.award = 0
 
     def genFood(self):
@@ -59,20 +69,25 @@ class GameEngine:
         snackLen = len(self.snake)
         head = self.snake[snackLen - 1]
         if self.direction == 0:
-            self.snake.append((head[0], head[1] - 1))
+            self.snake.insert(0,(head[0], head[1] - 1))
         elif self.direction == 1:
-            self.snake.append((head[0] + 1, head[1]))
+            self.snake.insert(0,(head[0] + 1, head[1]))
         elif self.direction == 2:
-            self.snake.append((head[0], head[1] + 1))
+            self.snake.insert(0,(head[0], head[1] + 1))
         elif self.direction == 3:
-            self.snake.append((head[0] - 1, head[1]))
-        self.snake.pop(0)
+            self.snake.insert(0,(head[0] - 1, head[1]))
+        self.snake.pop(-1)
 
         dis_now = 0
         if self.snake[0][0] != self.food[0][0] and self.snake[0][1] != self.food[0][1]:
             dis_now += self.calDistance()
         else:
             self.award = 200
+            self.snake.append(self.food[0])
+        if self.snake[0][0] > self.config['game']['xpx'] or self.snake[0][0] < 0:
+            if self.snake[0][1] > self.config['game']['ypx'] or self.snake[0][1] < 0:
+                self.reset()
+                self.award -= 300
         self.award += dis_prev - dis_now
 
     def getState(self):
@@ -81,10 +96,14 @@ class GameEngine:
             self.state[0][i[0]][i[1]] = color['yellow'][0]
             self.state[1][i[0]][i[1]] = color['yellow'][1]
             self.state[2][i[0]][i[1]] = color['yellow'][2]
-        for i in self.snake:
-            self.state[0][i[0]][i[1]] = color['green'][0] * 0.99
-            self.state[1][i[0]][i[1]] = color['green'][1] * 0.99
-            self.state[2][i[0]][i[1]] = color['green'][2] * 0.99
+        for i in range(len(self.snake)):
+            colorSnake='green'
+            if i == 0:
+                colorSnake='blue'
+            body=self.snake[i]
+            self.state[0][body[0]][body[1]] = color[colorSnake][0] * 0.99**i
+            self.state[1][body[0]][body[1]] = color[colorSnake][1] * 0.99**i
+            self.state[2][body[0]][body[1]] = color[colorSnake][2] * 0.99**i
         return self.state
 
     def getAward(self):

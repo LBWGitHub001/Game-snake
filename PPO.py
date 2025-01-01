@@ -38,7 +38,8 @@ class PPO:
                                          config=config,
                                          dataModel=dataModel,
                                          dataSelector=[self.DataSelector],
-                                         device=device
+                                         device=device,
+                                         render=(config['render'] and i==0 )
                                          )
             self.dataModelList.append(dataThread)
 
