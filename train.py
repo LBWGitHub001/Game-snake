@@ -69,7 +69,7 @@ def main(args):
         device=device,
     )
 
-    states = vec_env.reset()
+    states, masks = vec_env.reset()
     last_dones = np.zeros(args.num_envs, dtype=np.bool_)
 
     total_steps = 0
@@ -88,14 +88,14 @@ def main(args):
             for step in range(args.steps_per_env):
                 total_steps += args.num_envs
 
-                # Batched policy forward pass
-                actions, logprobs, values = ppo.policy_old.act_batch(states)
+                # Batched policy forward pass with Action Masking
+                actions, logprobs, values = ppo.policy_old.act_batch(states, masks=masks)
 
                 # Parallel environment step across threads
-                next_states, rewards, dones, infos = vec_env.step(actions)
+                next_states, rewards, dones, next_masks, infos = vec_env.step(actions)
 
-                # Store transitions into offline buffer
-                buffer.insert(states, actions, rewards, dones, logprobs, values)
+                # Store transitions into offline buffer (including masks)
+                buffer.insert(states, actions, rewards, dones, logprobs, values, masks)
 
                 # Collect completed game scores
                 for info in infos:
@@ -108,10 +108,11 @@ def main(args):
                             ppo.save(best_path)
 
                 states = next_states
+                masks = next_masks
                 last_dones = dones
 
             # Compute bootstrap value for GAE
-            _, _, last_values = ppo.policy_old.act_batch(states)
+            _, _, last_values = ppo.policy_old.act_batch(states, masks=masks)
             buffer.compute_returns_and_advantages(
                 last_values=last_values,
                 last_dones=last_dones,

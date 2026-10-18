@@ -59,7 +59,7 @@ class ActorCritic(nn.Module):
         _, values = self.forward(x)
         return values
 
-    def act(self, state, memory=None):
+    def act(self, state, mask=None, memory=None):
         """Select action during single-environment interaction."""
         if not isinstance(state, torch.Tensor):
             state = torch.tensor(state, dtype=torch.float32, device=device)
@@ -73,6 +73,12 @@ class ActorCritic(nn.Module):
 
         with torch.no_grad():
             logits, value = self.forward(state_input)
+            if mask is not None:
+                mask_t = torch.as_tensor(mask, dtype=torch.bool, device=logits.device)
+                if mask_t.dim() == 1:
+                    mask_t = mask_t.unsqueeze(0)
+                logits = torch.where(mask_t, logits, -1e8)
+
             dist = Categorical(logits=logits)
             action = dist.sample()
             log_prob = dist.log_prob(action)
@@ -87,14 +93,17 @@ class ActorCritic(nn.Module):
             memory.actions.append(act_idx)
             memory.logprobs.append(act_log_prob)
             memory.values.append(val)
+            if hasattr(memory, "masks"):
+                memory.masks.append(mask)
 
         return act_idx
 
-    def act_batch(self, states):
+    def act_batch(self, states, masks=None):
         """Batched action selection for parallel multi-environment collection.
 
         Args:
             states: np.ndarray or torch.Tensor of shape (N, 3, 12, 12)
+            masks: np.ndarray or torch.Tensor of shape (N, 3)
 
         Returns:
             actions (np.ndarray): (N,)
@@ -108,6 +117,10 @@ class ActorCritic(nn.Module):
 
         with torch.no_grad():
             logits, values = self.forward(states)
+            if masks is not None:
+                masks_t = torch.as_tensor(masks, dtype=torch.bool, device=logits.device)
+                logits = torch.where(masks_t, logits, -1e8)
+
             dist = Categorical(logits=logits)
             actions = dist.sample()
             logprobs = dist.log_prob(actions)
@@ -118,10 +131,13 @@ class ActorCritic(nn.Module):
             values.squeeze(-1).cpu().numpy(),
         )
 
-
-    def evaluate(self, states, actions):
+    def evaluate(self, states, actions, masks=None):
         """Evaluate batch of states and actions during PPO update."""
         logits, values = self.forward(states)
+        if masks is not None:
+            masks_t = torch.as_tensor(masks, dtype=torch.bool, device=logits.device)
+            logits = torch.where(masks_t, logits, -1e8)
+
         dist = Categorical(logits=logits)
 
         action_log_probs = dist.log_prob(actions)
@@ -129,3 +145,4 @@ class ActorCritic(nn.Module):
         state_values = values.squeeze(-1)
 
         return action_log_probs, dist_entropy, state_values
+

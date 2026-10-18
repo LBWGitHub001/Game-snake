@@ -52,11 +52,14 @@ def main(args):
             total_reward = 0.0
 
             while True:
-                # Deterministic greedy action selection for evaluation
+                # Deterministic greedy action selection with Action Masking
+                mask = env.get_action_mask()
                 state_tensor = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
+                mask_tensor = torch.tensor(mask, dtype=torch.bool, device=device).unsqueeze(0)
                 with torch.no_grad():
                     logits, _ = model(state_tensor)
-                    action = torch.argmax(logits, dim=-1).item()
+                    masked_logits = torch.where(mask_tensor, logits, -1e8)
+                    action = torch.argmax(masked_logits, dim=-1).item()
 
                 state, reward, done = env.stepOver(action)
                 total_reward += reward

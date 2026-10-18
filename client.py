@@ -131,6 +131,47 @@ class GameAPI:
 
         return graph
 
+    def get_action_mask(self):
+        """Return boolean mask of shape (3,) indicating safe relative actions.
+        0: Turn Left, 1: Go Straight, 2: Turn Right
+        """
+        hx, hy = self.snake[0]
+        mask = [True, True, True]
+
+        for a in range(3):
+            target_dir = operation[a][self.direction]
+            if target_dir == Direction.UP:
+                nh = (hx, hy - 1)
+            elif target_dir == Direction.DOWN:
+                nh = (hx, hy + 1)
+            elif target_dir == Direction.LEFT:
+                nh = (hx - 1, hy)
+            elif target_dir == Direction.RIGHT:
+                nh = (hx + 1, hy)
+            else:
+                nh = (hx, hy)
+
+            # 1. Boundary collision check
+            if nh[0] < 0 or nh[0] >= self.width or nh[1] < 0 or nh[1] >= self.height:
+                mask[a] = False
+                continue
+
+            # 2. Body collision check (vacating tail is safe if not eating food this step)
+            body_check = (
+                self.snake[:-1]
+                if (self.food is not None and nh != self.food)
+                else self.snake
+            )
+            if nh in body_check:
+                mask[a] = False
+                continue
+
+        # If all moves are fatal, allow all moves so agent takes a step and terminates
+        if not any(mask):
+            mask = [True, True, True]
+
+        return np.array(mask, dtype=np.bool_)
+
     def stepOver(self, action):
         """Step the environment forward by 1 tick using a relative action (0: left, 1: straight, 2: right).
 
@@ -346,9 +387,15 @@ class ParallelGameEnv:
         self.executor = ThreadPoolExecutor(max_workers=num_envs)
 
     def reset(self):
-        """Reset all environments and return array of states with shape (num_envs, 3, 12, 12)."""
+        """Reset all environments and return array of states and action masks.
+
+        Returns:
+            states (np.ndarray): shape (num_envs, 3, 12, 12)
+            masks (np.ndarray): shape (num_envs, 3)
+        """
         states = [env.reset() for env in self.envs]
-        return np.array(states, dtype=np.float32)
+        masks = [env.get_action_mask() for env in self.envs]
+        return np.array(states, dtype=np.float32), np.array(masks, dtype=np.bool_)
 
     def _step_single(self, args):
         env_idx, action = args
@@ -362,7 +409,8 @@ class ParallelGameEnv:
         if done:
             # Auto-reset sub-environment to continue collecting seamless experience
             next_state = env.reset()
-        return env_idx, next_state, reward, done, info
+        next_mask = env.get_action_mask()
+        return env_idx, next_state, reward, done, next_mask, info
 
     def step(self, actions):
         """Execute actions across all environments in parallel threads.
@@ -374,6 +422,7 @@ class ParallelGameEnv:
             next_states (np.ndarray): shape (num_envs, 3, 12, 12)
             rewards (np.ndarray): shape (num_envs,)
             dones (np.ndarray): shape (num_envs,)
+            next_masks (np.ndarray): shape (num_envs, 3)
             infos (list[dict]): length num_envs
         """
         futures = self.executor.map(
@@ -385,9 +434,10 @@ class ParallelGameEnv:
         next_states = np.array([r[1] for r in results], dtype=np.float32)
         rewards = np.array([r[2] for r in results], dtype=np.float32)
         dones = np.array([r[3] for r in results], dtype=np.bool_)
-        infos = [r[4] for r in results]
+        next_masks = np.array([r[4] for r in results], dtype=np.bool_)
+        infos = [r[5] for r in results]
 
-        return next_states, rewards, dones, infos
+        return next_states, rewards, dones, next_masks, infos
 
     def close(self):
         """Shut down thread pool and close environments."""

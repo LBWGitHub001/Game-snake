@@ -13,6 +13,7 @@ class Memory:
         self.logprobs = []
         self.is_terminal = []
         self.values = []
+        self.masks = []
 
     def clear(self):
         del self.states[:]
@@ -21,13 +22,14 @@ class Memory:
         del self.logprobs[:]
         del self.is_terminal[:]
         del self.values[:]
+        del self.masks[:]
 
     def __len__(self):
         return len(self.states)
 
 
 class OfflineRolloutBuffer:
-    """Buffer to store rollouts from multiple parallel environments for offline/batch PPO updates."""
+    """Buffer to store rollouts from multiple parallel environments with Action Masks."""
 
     def __init__(self, steps_per_env, num_envs, state_shape=(3, 12, 12), device="cpu"):
         self.steps_per_env = steps_per_env
@@ -42,12 +44,13 @@ class OfflineRolloutBuffer:
         self.dones = np.zeros((steps_per_env, num_envs), dtype=np.bool_)
         self.logprobs = np.zeros((steps_per_env, num_envs), dtype=np.float32)
         self.values = np.zeros((steps_per_env, num_envs), dtype=np.float32)
+        self.masks = np.zeros((steps_per_env, num_envs, 3), dtype=np.bool_)
 
         self.step_idx = 0
         self.returns = None
         self.advantages = None
 
-    def insert(self, state, action, reward, done, logprob, value):
+    def insert(self, state, action, reward, done, logprob, value, mask):
         """Insert a parallel step across all environments."""
         self.states[self.step_idx] = state
         self.actions[self.step_idx] = action
@@ -55,6 +58,7 @@ class OfflineRolloutBuffer:
         self.dones[self.step_idx] = done
         self.logprobs[self.step_idx] = logprob
         self.values[self.step_idx] = value
+        self.masks[self.step_idx] = mask
         self.step_idx += 1
 
     def compute_returns_and_advantages(self, last_values, last_dones, gamma=0.99, gae_lambda=0.95):
@@ -78,12 +82,13 @@ class OfflineRolloutBuffer:
         self.returns = self.advantages + self.values
 
     def get_batches(self, batch_size=128):
-        """Flatten across steps and envs, yielding shuffled mini-batches for offline PPO training."""
+        """Flatten across steps and envs, yielding shuffled mini-batches with masks for offline PPO training."""
         b_states = self.states.reshape(-1, *self.state_shape)
         b_actions = self.actions.reshape(-1)
         b_logprobs = self.logprobs.reshape(-1)
         b_returns = self.returns.reshape(-1)
         b_advantages = self.advantages.reshape(-1)
+        b_masks = self.masks.reshape(-1, 3)
 
         # Normalize advantages
         adv_mean = b_advantages.mean()
@@ -97,6 +102,7 @@ class OfflineRolloutBuffer:
         t_logprobs = torch.tensor(b_logprobs, dtype=torch.float32, device=self.device)
         t_returns = torch.tensor(b_returns, dtype=torch.float32, device=self.device)
         t_advantages = torch.tensor(b_advantages, dtype=torch.float32, device=self.device)
+        t_masks = torch.tensor(b_masks, dtype=torch.bool, device=self.device)
 
         total_size = len(b_states)
         indices = torch.randperm(total_size, device=self.device)
@@ -109,6 +115,7 @@ class OfflineRolloutBuffer:
                 t_logprobs[batch_idx],
                 t_returns[batch_idx],
                 t_advantages[batch_idx],
+                t_masks[batch_idx],
             )
 
     def reset(self):
@@ -128,6 +135,7 @@ class OfflineRolloutBuffer:
             dones=self.dones,
             logprobs=self.logprobs,
             values=self.values,
+            masks=self.masks,
             returns=self.returns,
             advantages=self.advantages,
         )

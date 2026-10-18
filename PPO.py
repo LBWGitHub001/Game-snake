@@ -61,6 +61,11 @@ class PPO:
         old_states = torch.stack(memory.states).to(self.device)
         old_actions = torch.tensor(memory.actions, dtype=torch.long, device=self.device)
         old_logprobs = torch.tensor(memory.logprobs, dtype=torch.float32, device=self.device)
+        old_masks = (
+            torch.tensor(np.array(memory.masks), dtype=torch.bool, device=self.device)
+            if hasattr(memory, "masks") and len(memory.masks) == len(memory.actions)
+            else None
+        )
 
         # 3. Compute baseline values and advantages
         if len(memory.values) == len(returns):
@@ -68,7 +73,7 @@ class PPO:
             advantages = returns - old_values
         else:
             with torch.no_grad():
-                _, _, old_values = self.policy_old.evaluate(old_states, old_actions)
+                _, _, old_values = self.policy_old.evaluate(old_states, old_actions, masks=old_masks)
                 advantages = returns - old_values
 
         # Normalize advantages for training stability
@@ -87,8 +92,11 @@ class PPO:
                 b_old_logprobs = old_logprobs[batch_idx]
                 b_returns = returns[batch_idx]
                 b_advantages = advantages[batch_idx]
+                b_masks = old_masks[batch_idx] if old_masks is not None else None
 
-                logprobs, dist_entropy, state_values = self.policy.evaluate(b_states, b_actions)
+                logprobs, dist_entropy, state_values = self.policy.evaluate(
+                    b_states, b_actions, masks=b_masks
+                )
 
                 # Ratio: r(theta) = exp(log pi_new - log pi_old)
                 ratios = torch.exp(logprobs - b_old_logprobs)
@@ -112,11 +120,20 @@ class PPO:
         self.policy_old.load_state_dict(self.policy.state_dict())
 
     def update_offline(self, buffer, epochs=4, batch_size=128):
-        """Perform offline / batch PPO training on the collected multi-environment rollout buffer."""
+        """Perform offline / batch PPO training on the collected multi-environment rollout buffer with Action Masking."""
         loss_history = []
         for _ in range(epochs):
-            for b_states, b_actions, b_old_logprobs, b_returns, b_advantages in buffer.get_batches(batch_size):
-                logprobs, dist_entropy, state_values = self.policy.evaluate(b_states, b_actions)
+            for (
+                b_states,
+                b_actions,
+                b_old_logprobs,
+                b_returns,
+                b_advantages,
+                b_masks,
+            ) in buffer.get_batches(batch_size):
+                logprobs, dist_entropy, state_values = self.policy.evaluate(
+                    b_states, b_actions, masks=b_masks
+                )
 
                 # Ratio: r(theta) = exp(log pi_new - log pi_old)
                 ratios = torch.exp(logprobs - b_old_logprobs)
