@@ -1,58 +1,90 @@
-# 贪吃蛇小游戏
-## 运行game.py即可开始游戏
-> 使用方向键上下左右可以控制蛇的运动方向，去捕食更多食物，变的更长吧
+# 贪吃蛇强化学习 (Snake RL with PPO)
 
-## 模型训练
-### 原理
-> PPO算法  
-> 使用两套神经网络(CNN,全连接)前者作为Actor，后者作为Critic  
-> 使用CNN来决策当前状态的动作，使用全连接网络来调整学习任务难度
+基于 **PyTorch** 和 **PPO (Proximal Policy Optimization)** 深度强化学习算法训练的贪吃蛇智能体。
 
-### 安装cuda[Linux-Ubuntu]
-cuda是Nvidia开发的帮助开发人员更高的利用GPU进行并行计算的框架，对于深度学习至关重要，可以起到加速模型的训练和推理
->1. 检查本机的显卡驱动是否安装好`nvidia-smi`如果显示信息说明已经安装完成
->2. 首先进入[Nvidia Cuda官网](https://developer.nvidia.com/cuda-toolkit)下载安装包这里推荐下载
-    cuda的11.8版本，推荐runfile模式安装  
-    1 `wget https://developer.download.nvidia.com/compute/cuda/11.8.0/local_installers/cuda_11.8.0_520.61.05_linux.run`
-    2 `sudo sh cuda_11.8.0_520.61.05_linux.run`
->3. 安装完成后不要关闭终端，按照终端上的提示将库写入环境变量~/.bashrc
-    ?4. 检查是否安装成功 `nvcc -V` 如出现编译器版本号则说明成功
-### 安装cudnn
-cuDNN是Nvidia开发的模型推理加速的拓展库，对于模型的部署至关重要
->1. 前往[Nvidia cuDNN官网](https://developer.nvidia.com/cudnn)下载最新版本即可
->2. 注意此时不需要再次安装cuda，因此下面的两条命令不需要执行
-### 安装Anaconda3
-Anaconda是一个Python虚拟环境管理器，其中内置了大量Python模块，可以方便的管理模块和虚拟环境
->1. [Anaconda官网](https://www.anaconda.com/download/)下载，注意也要添加到环境变量中
-### 安装PyTorch
-PyTorch是现在流行的神经网络搭建架构，可以帮助开发人员快速实现神经网络的搭建
->1. 从[官网下载库](https://download.pytorch.org/whl/torch_stable.html)中下载，与cuda版本对应，如果你的cuda版本是11.8，python是3.8，那么应该安装 **[torch-2.0.0+cu118-cp38-cp38-linux_x86_64.whl]**
->2. 下载torchvision，同样版本要对应，不再赘述
+---
 
-## 训练
-1. `python train.py`
-### 可选参数
->1. [--timestep] 收集多少数据之后开始学习(默认 2000)
->2. [--episodes] 玩多少遍游戏(默认 50000)
->3. [--lr] 学习率(默认 0.03)
->4. [--gamma] 折扣因子(默认 0.99)  
->5. [--save-path] 模型保存路径(默认 './Models/AC.pth')  
->6. [--num-game] 游戏线程(默认 1)
->7. [--epochs] 一次数据训练次数(默认 4)
->8. [--seed] 随机种子,默认为None(默认 None)
->9. [--eps] PPO2算法中的界(默认 0.2)
->10. [--bate1] Adam动量的位置惯性系数1(默认 0.2)
->11. [--bate2] Adam动量的速度惯性系数2(默认 0.2)
->12. [--render] 是否要显示过程(默认 False,指定即为true)
+## 一、环境准备
 
+推荐使用 Conda 虚拟环境（如已创建 `RL` 环境）：
 
-## 调试
-1. `python export.py`
-### 可选参数
->1. [--save-path]模型存储位置(默认 './Models/AC.pth')
->2. [--seed] 随机种子(默认 None)
->3. [--render] 是否要显示过程(默认 True,指定即为False)
-2. 奖励函数调整
->1. GameAPI.get_reward()函数  
-> 通过前后两帧的区别对这一步操作进行打分，最关键的步骤，需要更改
+```bash
+# 激活环境
+conda activate RL
 
+# 安装必要依赖（若未安装）
+pip install -r requirements.txt
+```
+
+---
+
+## 二、运行游戏
+
+### 1. 人类玩家游玩模式 (Human Play)
+通过键盘直接体验贪吃蛇小游戏：
+```bash
+python game.py
+```
+- **控制按键**：方向键 `[↑]` `[↓]` `[←]` `[→]` 控制移动。
+- **重新开始**：死亡后按 `[空格键]` 或 `[R]`。
+- **退出游戏**：`[ESC]` 或直接关闭窗口。
+
+---
+
+### 2. 训练强化学习模型 (多线程并行采集 + Offline PPO 批次优化)
+```bash
+# 启动多线程并行训练（默认开启 8 个游戏线程，极速采集）
+python train.py --num-envs 8 --steps-per-env 256 --epochs 4 --total-timesteps 300000
+
+# 可选：导出训练过程中的离线轨迹数据集 (.npz) 用于后续分析与回放
+python train.py --num-envs 16 --save-dataset ./Datasets/snake_offline.npz
+```
+
+#### 常用训练参数：
+- `--num-envs`: 并发游戏线程数（默认 `8`，可设 `8`、`16` 等）。多线程并行开启多个游戏，极大丰富探索状态并成倍提升采样吞吐量。
+- `--steps-per-env`: 每个游戏线程采集步数（默认 `256`），一次 Rollout 产生 $8 \times 256 = 2048$ 条转移样本。
+- `--epochs`: Offline 数据集批次更新轮次（默认 `4`），对收集的大样本池进行多轮 Mini-batch 深度迭代。
+- `--batch-size`: Mini-batch 梯度更新批次大小（默认 `128`）。
+- `--total-timesteps`: 总训练步数（默认 `300000`）。
+- `--lr`: Adam 优化器学习率（默认 `0.0003`）。
+- `--gamma`: 折扣因子 $\gamma$（默认 `0.99`）。
+- `--gae-lambda`: 广义优势估计（GAE）因子（默认 `0.95`）。
+- `--save-path`: 模型权重保存路径（默认 `./Models/AC.pth`）。
+- `--save-dataset`: 可选离线数据集导出路径（如 `./Datasets/offline.npz`）。
+
+---
+
+### 3. 查看与评估训练好的 AI (Evaluation & Visualization)
+加载已训练好的权重模型，观察贪吃蛇自主游玩：
+```bash
+# 评估最新保存的模型
+python export.py --model-path ./Models/best_model.pth --episodes 10 --fps 15
+```
+
+---
+
+## 三、强化学习算法与架构原理
+
+1. **状态表征 (State Space)**
+   - 观测网格为 $12 \times 12$，三通道特征图输入 `(3, 12, 12)`：
+     - **Channel 0（蛇头）**：头部位置为 1.0，其余为 0。
+     - **Channel 1（蛇身）**：沿颈部到尾部呈指数衰减的梯度数值，保留身体几何形态与蛇身走向。
+     - **Channel 2（食物）**：食物所在网格点为 1.0。
+
+2. **动作空间 (Action Space)**
+   - 采用相对朝向控制，共 3 种离散动作：
+     - `0`: 向左转
+     - `1`: 保持直行
+     - `2`: 向右转
+   - 这种相对坐标设计天然消除了 180 度直接掉头自杀的非法动作，大幅降低了策略搜索空间。
+
+3. **Actor-Critic 网络结构**
+   - 采用共享特征提取层（3层保持空间网格分辨率的卷积层 + 共享全连接层）。
+   - **Actor Head**：输出 3 个离散动作的未归一化对数概率（Logits），采用 Categorical 分布采样。
+   - **Critic Head**：输出状态期望累计收益 $V(s)$。
+
+4. **奖励函数 (Reward Shaping)**
+   - 吃到食物：`+10.0`
+   - 撞墙或撞自身死亡：`-10.0`
+   - 朝食物方向靠近：`+1.0`；远离食物：`-1.0`
+   - 防死循环机制：长时间（超过步数上限）未吃到食物判定为饿死并终止游戏。

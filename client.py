@@ -1,26 +1,24 @@
-import numpy as np
-import pygame
 import math
 import random
-import time
-from threading import Lock
-# import threading
 from enum import Enum, auto
+from threading import Lock
+import numpy as np
+import pygame
 
-from pandas import options
+# Default configurations
+GRID_WIDTH = 12
+GRID_HEIGHT = 12
+DEFAULT_BLOCK_SIZE = 50
+TOTAL_CELLS = GRID_WIDTH * GRID_HEIGHT
 
-screen_width = 1200
-screen_height = 1200
-block_size = 100
-block = (block_size, block_size)
-X_max = screen_width // block_size
-Y_max = screen_height // block_size
-total = X_max * Y_max
-fps = 300
-# id_prop = {0: 'null', 1: 'body', 2: 'head', 3: 'food'}
-color = {'black': (0, 0, 0), 'red': (255, 0, 0), 'green': (0, 255, 0), 'blue': (0, 0, 255),
-         'yellow': (255, 255, 0), 'purple': (255, 0, 255), 'cyan': (0, 255, 255), 'white': (255, 255, 255)}
-isDead = False
+COLOR = {
+    'black': (15, 15, 18),
+    'grid': (30, 30, 35),
+    'snake_head': (65, 105, 225),   # Royal Blue
+    'snake_body': (46, 204, 113),   # Green
+    'food': (231, 76, 60),          # Red
+    'white': (240, 240, 240)
+}
 
 
 class Direction(Enum):
@@ -30,184 +28,301 @@ class Direction(Enum):
     RIGHT = auto()
 
 
-operation = [{Direction.UP: Direction.LEFT, Direction.DOWN: Direction.RIGHT, Direction.LEFT: Direction.DOWN,
-              Direction.RIGHT: Direction.UP},
-             {Direction.UP: Direction.UP, Direction.DOWN: Direction.DOWN, Direction.LEFT: Direction.LEFT,
-              Direction.RIGHT: Direction.RIGHT},
-             {Direction.UP: Direction.RIGHT, Direction.DOWN: Direction.LEFT, Direction.LEFT: Direction.UP,
-              Direction.RIGHT: Direction.DOWN}]
+# Relative actions: 0: Turn Left, 1: Go Straight, 2: Turn Right
+operation = [
+    {
+        Direction.UP: Direction.LEFT,
+        Direction.DOWN: Direction.RIGHT,
+        Direction.LEFT: Direction.DOWN,
+        Direction.RIGHT: Direction.UP,
+    },
+    {
+        Direction.UP: Direction.UP,
+        Direction.DOWN: Direction.DOWN,
+        Direction.LEFT: Direction.LEFT,
+        Direction.RIGHT: Direction.RIGHT,
+    },
+    {
+        Direction.UP: Direction.RIGHT,
+        Direction.DOWN: Direction.LEFT,
+        Direction.LEFT: Direction.UP,
+        Direction.RIGHT: Direction.DOWN,
+    },
+]
 
 
 class GameAPI:
-    def __init__(self):
-        #游戏数据
-        self.direction = Direction.RIGHT
-        #蛇的数据
-        self.food=[]
-        self.snake = [(6, 6), (5, 6)]  # save tuple for the position of snake head&body
-        self.food=self.frameGenFood()
+    """Snake game environment for RL training and human play."""
 
-        self.award = 0
+    def __init__(self, width=GRID_WIDTH, height=GRID_HEIGHT, block_size=DEFAULT_BLOCK_SIZE):
+        self.width = width
+        self.height = height
+        self.total_cells = width * height
+        self.block_size = block_size
+        self.screen_width = width * block_size
+        self.screen_height = height * block_size
+
+        self.snake = []
+        self.direction = Direction.RIGHT
+        self.food = None
+        self.score = 0
+        self.steps = 0
+        self.steps_without_food = 0
         self.isDead = False
         self.isEat = False
         self.isRender = False
 
+        self.screen = None
+        self.clock = None
+        self.font = None
 
+        self.reset()
 
-
-    def reset(self):  # 初始化,重新开始游戏,返回值:12*12图像
-        #游戏数据
-        #游戏数据
+    def reset(self):
+        """Reset game state and return initial 3x12x12 state matrix."""
+        mid_x = self.width // 2
+        mid_y = self.height // 2
+        self.snake = [(mid_x, mid_y), (mid_x - 1, mid_y)]
         self.direction = Direction.RIGHT
-        #蛇的数据
-        self.food=[]
-        self.snake = [(6, 6), (5, 6)]  # save tuple for the position of snake head&body
-        self.food=self.frameGenFood()
-
-        self.award = 0
+        self.score = 0
+        self.steps = 0
+        self.steps_without_food = 0
         self.isDead = False
         self.isEat = False
-        self.isRender = False
+        self.food = self.frameGenFood()
         return self.get_state()
 
     def frameGenFood(self):
-        if not self.food:  # if food Empty then Add one
-            food = random.randint(0, total - 1)
-            x = food % X_max
-            y = food // X_max
-            i = 1
-            m = 1
-            while (x,y) not in self.snake:
-                food = food + 1
-                food %= total
-                x = food % X_max
-                y = food // X_max
-            return x, y
-        else:
-            return self.food
+        """Randomly generate food on an empty grid cell."""
+        snake_set = set(self.snake)
+        empty_cells = [
+            (x, y)
+            for x in range(self.width)
+            for y in range(self.height)
+            if (x, y) not in snake_set
+        ]
+        if not empty_cells:
+            return None  # Win condition (snake fills board)
+        return random.choice(empty_cells)
 
     def get_state(self):
-        return self.toNumpy()
-    def stepOver(self,action):
-        opt=operation[action][self.direction]
+        """Return 3-channel state representation (3, 12, 12) as float32:
 
-        award = 0
-        d_food_pre = (self.snake[0][0] - self.food[0]) ** 2 + (self.snake[0][1] - self.food[1]) ** 2
-        self.isDead = self.frameForward(opt) # 前进一步，所有的信息都会被刷新
-        self.food = self.frameGenFood()
-        d_food_post = (self.snake[0][0] - self.food[0]) ** 2 + (self.snake[0][1] - self.food[1]) ** 2
-        if d_food_pre > d_food_post:
-            award += 5
-        else:
-            award -= 5
+        Channel 0: Snake Head (1.0)
+        Channel 1: Snake Body (decaying gradient from 1.0 down along body)
+        Channel 2: Food (1.0)
+        """
+        graph = np.zeros((3, self.height, self.width), dtype=np.float32)
+
+        # 1. Body channel
+        body_count = 0.0
+        for bx, by in self.snake[1:]:
+            graph[1, by, bx] = max(0.2, math.exp(-body_count))
+            body_count += 0.05
+
+        # 2. Head channel
+        hx, hy = self.snake[0]
+        graph[0, hy, hx] = 1.0
+
+        # 3. Food channel
+        if self.food is not None:
+            fx, fy = self.food
+            graph[2, fy, fx] = 1.0
+
+        return graph
+
+    def stepOver(self, action):
+        """Step the environment forward by 1 tick using a relative action (0: left, 1: straight, 2: right).
+
+        Returns:
+            state (np.ndarray): next state (3, 12, 12)
+            reward (float): reward gained
+            done (bool): whether episode is finished
+        """
+        self.steps += 1
+        self.steps_without_food += 1
+
+        # Determine target direction
+        target_dir = operation[action][self.direction]
+
+        # Manhattan distance to food before moving
+        d_food_pre = (
+            abs(self.snake[0][0] - self.food[0]) + abs(self.snake[0][1] - self.food[1])
+            if self.food
+            else 0
+        )
+
+        # Move forward
+        self.isDead = self.frameForward(target_dir)
+
+        # Reward shaping
+        reward = 0.0
         if self.isDead:
-            award -= 100
-        if self.isEat:
-            award += 20
-        return self.get_state(), award, self.isDead
-
-
-
-
-    def toNumpy(self):
-        Graph = np.zeros((3, 12, 12))
-        body_count = 0
-        for body in self.snake[1:]:
-            self.color_block(Graph,(body[0], body[1]), (0, 255 * math.exp(-body_count), 0))
-            body_count += 0.02
-        self.color_block(Graph,(self.snake[0][0], self.snake[0][1]), (0, 0, 255))
-        self.color_block(Graph,(self.food[0], self.food[1]), (255, 255, 0))
-        return Graph
-
-    def color_block(self,Graph, block_this, color_this):
-        Graph[0][block_this[0]][block_this[1]] = color_this[0]
-        Graph[1][block_this[0]][block_this[1]] = color_this[1]
-        Graph[2][block_this[0]][block_this[1]] = color_this[2]
-        return Graph
-
-    def render(self):
-        self.isRender = True
-        pygame.init()
-        pygame.font.init()
-        self.font = pygame.font.SysFont(None, 50)
-        self.screen = pygame.display.set_mode((screen_width, screen_height))
-        pygame.display.set_caption('贪吃蛇')
-        self.screen.fill((0, 0, 0))
-
-    def show(self):  # self.isRender=True,显示窗口
-        self.screen.fill(color['black'])
-        # snack = graph[0]
-        # food = graph[1][0]
-        # head = snack[0]
-        body_count = 0
-        for body in self.snake[1:]:
-            pygame.draw.rect(self.screen, (0, 255 * math.exp(-body_count), 0),
-                             pygame.Rect(position(body[0], body[1]), block))
-            body_count += 0.02
-        pygame.draw.rect(self.screen, color['yellow'], pygame.Rect(position(self.food[0][0], self.food[0][1]), block))
-        pygame.draw.rect(self.screen, color['blue'], pygame.Rect(position(self.snake[0][0], self.snake[0][1]), block))
-        score_text = self.font.render(f'Score: {self.score}', True, color['white'])
-        self.screen.blit(score_text, (10, 0))
-        pygame.display.flip()
-
-
-    def frameForward(self,direction):  # make sure operation legal, before using frameForward
-        self.direction=direction
-        self.isEat = False
-        head = self.snake[0]
-        if self.direction == Direction.UP:
-            head = (head[0], head[1] - 1)
-        elif self.direction == Direction.DOWN:
-            head = (head[0], head[1] + 1)
-        elif self.direction == Direction.LEFT:
-            head = (head[0] - 1, head[1])
-        elif self.direction == Direction.RIGHT:
-            head = (head[0] + 1, head[1])
-        if head in self.food:
-            self.food.clear()
-            self.isEat = True
-        if head[0] > X_max - 1 or head[0] < 0 or head[1] > Y_max - 1 or head[1] < 0:
-            self.isDead = True
-            #print("game over reason: Exceed boundary")
-            return self.isDead
-        if head in self.snake:
-            self.isDead = True
-            #print("game over reason: Head meet body")
-            return self.isDead
-        self.snake.insert(0, head)
-        if not self.isEat:
-            self.snake.pop(-1)  # 删除尾部一节
+            reward = -10.0
+        elif self.isEat:
+            reward = 10.0
+            self.score += 1
+            self.steps_without_food = 0
+            self.food = self.frameGenFood()
+            if self.food is None:  # Filled entire board
+                reward += 50.0
+                self.isDead = True
         else:
-            self.food=[]
+            # Distance reward: encourage moving toward food
+            if self.food:
+                d_food_post = abs(self.snake[0][0] - self.food[0]) + abs(self.snake[0][1] - self.food[1])
+                reward += 1.0 if d_food_post < d_food_pre else -1.0
+
+            # Prevent infinite non-eating loops (starvation limit)
+            max_starve_steps = 100 + len(self.snake) * 4
+            if self.steps_without_food >= max_starve_steps:
+                self.isDead = True
+                reward = -5.0
+
+        return self.get_state(), reward, self.isDead
+
+    def frameForward(self, direction):
+        """Advance the snake one step in the specified absolute direction."""
+        self.direction = direction
+        self.isEat = False
+        hx, hy = self.snake[0]
+
+        if self.direction == Direction.UP:
+            new_head = (hx, hy - 1)
+        elif self.direction == Direction.DOWN:
+            new_head = (hx, hy + 1)
+        elif self.direction == Direction.LEFT:
+            new_head = (hx - 1, hy)
+        elif self.direction == Direction.RIGHT:
+            new_head = (hx + 1, hy)
+        else:
+            new_head = (hx, hy)
+
+        # Boundary collision check
+        if (
+            new_head[0] < 0
+            or new_head[0] >= self.width
+            or new_head[1] < 0
+            or new_head[1] >= self.height
+        ):
+            self.isDead = True
+            return self.isDead
+
+        # Body collision check
+        if new_head in self.snake:
+            self.isDead = True
+            return self.isDead
+
+        # Check if food is eaten
+        if self.food is not None and new_head == self.food:
+            self.isEat = True
+
+        # Move snake
+        self.snake.insert(0, new_head)
+        if not self.isEat:
+            self.snake.pop()
 
         return self.isDead
 
+    def render(self):
+        """Initialize Pygame display."""
+        if not self.isRender:
+            self.isRender = True
+            pygame.init()
+            pygame.font.init()
+            self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+            pygame.display.set_caption("Snake AI - PPO")
+            self.clock = pygame.time.Clock()
+            self.font = pygame.font.SysFont("Arial", 22)
 
-def position(x, y):
-    return x * block_size, y * block_size
+    def show(self, fps=20):
+        """Render the current frame to the Pygame window."""
+        if not self.isRender:
+            self.render()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.close()
+                return False
+
+        self.screen.fill(COLOR['black'])
+
+        # Draw grid lines
+        for x in range(0, self.screen_width, self.block_size):
+            pygame.draw.line(self.screen, COLOR['grid'], (x, 0), (x, self.screen_height))
+        for y in range(0, self.screen_height, self.block_size):
+            pygame.draw.line(self.screen, COLOR['grid'], (0, y), (self.screen_width, y))
+
+        # Draw food
+        if self.food is not None:
+            fx, fy = self.food
+            rect = pygame.Rect(
+                fx * self.block_size + 2,
+                fy * self.block_size + 2,
+                self.block_size - 4,
+                self.block_size - 4,
+            )
+            pygame.draw.rect(self.screen, COLOR['food'], rect, border_radius=4)
+
+        # Draw snake body
+        for bx, by in self.snake[1:]:
+            rect = pygame.Rect(
+                bx * self.block_size + 2,
+                by * self.block_size + 2,
+                self.block_size - 4,
+                self.block_size - 4,
+            )
+            pygame.draw.rect(self.screen, COLOR['snake_body'], rect, border_radius=3)
+
+        # Draw snake head
+        hx, hy = self.snake[0]
+        head_rect = pygame.Rect(
+            hx * self.block_size + 1,
+            hy * self.block_size + 1,
+            self.block_size - 2,
+            self.block_size - 2,
+        )
+        pygame.draw.rect(self.screen, COLOR['snake_head'], head_rect, border_radius=5)
+
+        # Draw Score & Steps
+        info_text = f"Score: {self.score}  Steps: {self.steps}"
+        surface = self.font.render(info_text, True, COLOR['white'])
+        self.screen.blit(surface, (10, 10))
+
+        pygame.display.flip()
+        self.clock.tick(fps)
+        return True
+
+    def close(self):
+        """Close Pygame window safely."""
+        if self.isRender:
+            pygame.quit()
+            self.isRender = False
 
 
 class GameManager:
+    """Manager supporting single or multi-game environments for backward compatibility."""
+
     _instance = None
     _lock = Lock()
 
-    def __new__(cls, *args, **kwargs):  # singleton pattern
+    def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
                     cls._instance = super(GameManager, cls).__new__(cls, *args, **kwargs)
-        return cls._instance  # instance exits
+        return cls._instance
 
     def __init__(self):
-        self.games = []
-        self.num_game = 0
-        self.total_render = True
+        if not hasattr(self, 'games'):
+            self.games = [GameAPI()]
+            self.num_game = 1
 
     def set_game_num(self, num_game):
-        self.games = [GameAPI() for _ in range(num_game)]
-        self.num_game = num_game
+        self.num_game = max(1, num_game)
+        self.games = [GameAPI() for _ in range(self.num_game)]
 
-    def get_game(self, index):
+    def get_game(self, index=0):
         return self.games[index]
 
     def __getitem__(self, index):
@@ -216,12 +331,66 @@ class GameManager:
     def __iter__(self):
         return iter(self.games)
 
-    def setRender(self, render):
-        # using setRender() after set_game_num(), actually need after self.games = [GameAPI() for _ in range(num_game)]
-        self.total_render = render
-        for game in self.games:
-            game.render()
+    def resetAll(self):
+        return [game.reset() for game in self.games]
 
-    def resetAll(self):  # reset all games
-        for game in self.games:
-            game.reset()
+
+class ParallelGameEnv:
+    """Vectorized / Multi-threaded environment running N concurrent Snake games."""
+
+    def __init__(self, num_envs=8, width=GRID_WIDTH, height=GRID_HEIGHT):
+        from concurrent.futures import ThreadPoolExecutor
+
+        self.num_envs = num_envs
+        self.envs = [GameAPI(width=width, height=height) for _ in range(num_envs)]
+        self.executor = ThreadPoolExecutor(max_workers=num_envs)
+
+    def reset(self):
+        """Reset all environments and return array of states with shape (num_envs, 3, 12, 12)."""
+        states = [env.reset() for env in self.envs]
+        return np.array(states, dtype=np.float32)
+
+    def _step_single(self, args):
+        env_idx, action = args
+        env = self.envs[env_idx]
+        next_state, reward, done = env.stepOver(action)
+        info = {
+            "score": env.score,
+            "steps": env.steps,
+            "is_dead": done,
+        }
+        if done:
+            # Auto-reset sub-environment to continue collecting seamless experience
+            next_state = env.reset()
+        return env_idx, next_state, reward, done, info
+
+    def step(self, actions):
+        """Execute actions across all environments in parallel threads.
+
+        Args:
+            actions: list or 1D array of length num_envs
+
+        Returns:
+            next_states (np.ndarray): shape (num_envs, 3, 12, 12)
+            rewards (np.ndarray): shape (num_envs,)
+            dones (np.ndarray): shape (num_envs,)
+            infos (list[dict]): length num_envs
+        """
+        futures = self.executor.map(
+            self._step_single, [(i, int(actions[i])) for i in range(self.num_envs)]
+        )
+        results = list(futures)
+        results.sort(key=lambda x: x[0])
+
+        next_states = np.array([r[1] for r in results], dtype=np.float32)
+        rewards = np.array([r[2] for r in results], dtype=np.float32)
+        dones = np.array([r[3] for r in results], dtype=np.bool_)
+        infos = [r[4] for r in results]
+
+        return next_states, rewards, dones, infos
+
+    def close(self):
+        """Shut down thread pool and close environments."""
+        self.executor.shutdown(wait=False)
+        for env in self.envs:
+            env.close()
