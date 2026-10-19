@@ -68,6 +68,7 @@ class GameAPI:
         self.score = 0
         self.steps = 0
         self.steps_without_food = 0
+        self.recent_heads = []
         self.isDead = False
         self.isEat = False
         self.isRender = False
@@ -87,6 +88,7 @@ class GameAPI:
         self.score = 0
         self.steps = 0
         self.steps_without_food = 0
+        self.recent_heads = []
         self.isDead = False
         self.isEat = False
         self.food = self.frameGenFood()
@@ -186,13 +188,6 @@ class GameAPI:
         # Determine target direction
         target_dir = operation[action][self.direction]
 
-        # Manhattan distance to food before moving
-        d_food_pre = (
-            abs(self.snake[0][0] - self.food[0]) + abs(self.snake[0][1] - self.food[1])
-            if self.food
-            else 0
-        )
-
         # Move forward
         self.isDead = self.frameForward(target_dir)
 
@@ -201,24 +196,27 @@ class GameAPI:
         if self.isDead:
             reward = -10.0
         elif self.isEat:
-            reward = 10.0
+            # 吃到果子：大幅提升奖励，确立最高优先级目标
+            reward = 20.0
             self.score += 1
             self.steps_without_food = 0
             self.food = self.frameGenFood()
-            if self.food is None:  # Filled entire board
-                reward += 50.0
+            if self.food is None:  # Filled entire board (通关)
+                reward += 100.0
                 self.isDead = True
         else:
-            # Distance reward: encourage moving toward food
-            if self.food:
-                d_food_post = abs(self.snake[0][0] - self.food[0]) + abs(self.snake[0][1] - self.food[1])
-                reward += 1.0 if d_food_post < d_food_pre else -1.0
+            # 加大靠近的优化：(15 - 距离果子距离) / 2
+            if self.food is not None:
+                hx, hy = self.snake[0]
+                fx, fy = self.food
+                dist_to_food = math.hypot(hx - fx, hy - fy)
+                reward += (15.0 - dist_to_food) / 2.0
 
-            # Prevent infinite non-eating loops (starvation limit)
-            max_starve_steps = 100 + len(self.snake) * 4
+            # 饥饿步数限制
+            max_starve_steps = 2 * (self.width + self.height) + len(self.snake) * 2
             if self.steps_without_food >= max_starve_steps:
                 self.isDead = True
-                reward = -5.0
+                reward = -10.0
 
         return self.get_state(), reward, self.isDead
 
@@ -249,14 +247,15 @@ class GameAPI:
             self.isDead = True
             return self.isDead
 
-        # Body collision check
-        if new_head in self.snake:
-            self.isDead = True
-            return self.isDead
-
         # Check if food is eaten
         if self.food is not None and new_head == self.food:
             self.isEat = True
+
+        # Body collision check (vacating tail is safe if not eating food this tick)
+        body_to_check = self.snake if self.isEat else self.snake[:-1]
+        if new_head in body_to_check:
+            self.isDead = True
+            return self.isDead
 
         # Move snake
         self.snake.insert(0, new_head)

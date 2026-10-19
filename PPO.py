@@ -20,6 +20,7 @@ class PPO:
         batch_size=64,
         state_size=(3, 12, 12),
         action_size=3,
+        ent_coef=0.02,
         device=device
     ):
         self.lr = lr
@@ -31,6 +32,7 @@ class PPO:
         self.batch_size = batch_size
         self.state_size = state_size
         self.action_size = action_size
+        self.ent_coef = ent_coef
         self.device = device
 
         # Networks: current policy and rollout policy
@@ -109,7 +111,7 @@ class PPO:
                 critic_loss = self.loss_fn(state_values, b_returns)
                 entropy_loss = -dist_entropy.mean()
 
-                loss = actor_loss + 0.5 * critic_loss + 0.01 * entropy_loss
+                loss = actor_loss + 0.5 * critic_loss + self.ent_coef * entropy_loss
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -146,7 +148,7 @@ class PPO:
                 critic_loss = self.loss_fn(state_values, b_returns)
                 entropy_loss = -dist_entropy.mean()
 
-                loss = actor_loss + 0.5 * critic_loss + 0.01 * entropy_loss
+                loss = actor_loss + 0.5 * critic_loss + self.ent_coef * entropy_loss
 
                 self.optimizer.zero_grad()
                 loss.backward()

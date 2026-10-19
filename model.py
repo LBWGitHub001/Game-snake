@@ -145,4 +145,3 @@ class ActorCritic(nn.Module):
         state_values = values.squeeze(-1)
 
         return action_log_probs, dist_entropy, state_values
-

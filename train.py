@@ -20,6 +20,7 @@ def get_args():
     parser.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
     parser.add_argument("--gae-lambda", type=float, default=0.95, help="GAE lambda parameter")
     parser.add_argument("--eps", type=float, default=0.2, help="PPO clip parameter")
+    parser.add_argument("--ent-coef", type=float, default=0.02, help="Entropy bonus coefficient to prevent circular policy collapse")
     parser.add_argument("--epochs", type=int, default=4, help="Offline training epochs per rollout buffer")
     parser.add_argument("--batch-size", type=int, default=128, help="Mini-batch size for offline update")
     parser.add_argument("--save-path", type=str, default="./Models/AC.pth", help="Checkpoint save path")
@@ -46,7 +47,7 @@ def main(args):
     print(f" - Offline Batch Samples:   {batch_samples} transitions / iteration")
     print(f" - Total Iterations:       {total_iterations} (~{args.total_timesteps} steps)")
     print(f" - Offline Update Epochs:  {args.epochs} (batch size {args.batch_size})")
-    print(f" - Learning Rate / Gamma:  {args.lr} / {args.gamma}")
+    print(f" - LR / Gamma / Ent-Coef:  {args.lr} / {args.gamma} / {args.ent_coef}")
     print(f" - Checkpoint Save Path:   {args.save_path}")
     print("======================================================================")
 
@@ -66,6 +67,7 @@ def main(args):
         epochs=args.epochs,
         eps=args.eps,
         batch_size=args.batch_size,
+        ent_coef=args.ent_coef,
         device=device,
     )
 

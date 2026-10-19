@@ -38,8 +38,12 @@ def main():
                 if event.key == pygame.K_ESCAPE:
                     running = False
                     break
+                elif event.key == pygame.K_r:
+                    env.reset()
+                    current_dir = env.direction
+                    game_over = False
                 elif game_over:
-                    if event.key in (pygame.K_SPACE, pygame.K_r):
+                    if event.key == pygame.K_SPACE:
                         env.reset()
                         current_dir = env.direction
                         game_over = False

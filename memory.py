@@ -67,11 +67,10 @@ class OfflineRolloutBuffer:
         last_gae_lam = 0.0
 
         for t in reversed(range(self.steps_per_env)):
+            next_non_terminal = 1.0 - self.dones[t].astype(np.float32)
             if t == self.steps_per_env - 1:
-                next_non_terminal = 1.0 - last_dones.astype(np.float32)
                 next_values = last_values
             else:
-                next_non_terminal = 1.0 - self.dones[t + 1].astype(np.float32)
                 next_values = self.values[t + 1]
 
             delta = self.rewards[t] + gamma * next_values * next_non_terminal - self.values[t]
